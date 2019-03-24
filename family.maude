@@ -1,0 +1,229 @@
+fmod STRING-LIST is
+    protecting STRING .
+
+    sort StringList .
+    subsort String < StringList .
+    op nil : -> StringList [ctor] .
+    op __ : StringList StringList -> StringList [ctor assoc id: nil] .
+endfm
+
+mod OO-POPULATION is
+    protecting NAT .
+    protecting STRING-LIST .
+
+    *** Objects, messages, object names, and configurations:
+    sorts Oid Object Msg Configuration .
+    subsorts Object Msg < Configuration .
+    op none : -> Configuration [ctor] .
+    op __ : Configuration Configuration -> Configuration [ctor assoc comm id: none] .
+
+    subsort String < Oid .
+
+    *** Message for separating from spouse:
+    op separate : Oid -> Msg [ctor] .
+
+    sort Status .
+    op single : -> Status [ctor] .
+    ops engaged married separated : Oid -> Status [ctor] .
+    
+    *** Classes:
+    ---op <_: Names | OKnames:_> : Oid StringList -> Object [ctor] .
+    ---op <_: Person | age:_, status:_> : Oid Nat Status -> Object [ctor] .
+
+    *** Use only messages instead to begin with (more similar to prolog)
+    ops Boynames Girlnames : StringList -> Msg .
+    op relationshipStatus : Oid Status -> Msg .
+    op age : Oid Nat -> Msg .
+
+    ---op parent : Oid Oid -> Msg .
+    ---ops male female : Oid -> Msg .
+    op parent : Oid Oid -> Bool .
+    ops male female : Oid -> Bool .
+
+    *** these must be deduced by prolog program family.pl
+    ops father mother brother sister uncle aunt grandfather grandmother : Oid Oid -> Bool .
+
+    subsort Bool < Msg .
+    op birthday : Oid -> Bool .
+    op neg : Bool -> Bool .
+
+
+    *** need some way of saying if the terms brother(O, O') or (not brother(O, O')) does not exist,
+    *** then the prolog server should be queried
+    *** * use a function neg : Bool -> Bool (and subsort Bool < Msg) for not brother(O, O')
+    *** * then use the contains function to check if neither of brother(O, O') nor neg(brother(O, O') exists, then query prolog
+
+    vars X X' X'' X''' X'''' : String .
+    vars FATHER MOTHER : Oid .
+    vars N N' : Nat .
+    vars S S' : Status .
+    vars L L' L'' : StringList .
+    vars C C' Conf : Configuration .
+    vars O O' : Oid .
+
+
+    crl [test] :
+        age(O, N)
+      =>
+        age(O, N + 1)
+      if birthday(O) .
+
+    rl [bday] :
+        age(O, N)
+        birthday(O)
+      =>
+        age(O, N + 1) .
+
+    rl [not_bday] :
+        age(O, N)
+        neg(birthday(O))
+      =>
+        age(O, N + 5) .
+
+
+    *** siblings can not be engaged
+    crl [engagement_male] :
+        relationshipStatus(O, single) age(O, N)
+        relationshipStatus(O', single) age(O', N')
+        male(O)
+        neg(brother(O, O'))
+      =>
+        relationshipStatus(O, engaged(O')) age(O, N)
+        relationshipStatus(O', engaged(O)) age(O', N')
+        male(O)
+        neg(brother(O, O'))
+      if N > 15 /\ N' > 15 .
+
+    crl [engagement_female] :
+        relationshipStatus(O, single) age(O, N)
+        relationshipStatus(O', single) age(O', N')
+        female(O)
+        neg(sister(O, O'))
+      =>
+        relationshipStatus(O, engaged(O')) age(O, N)
+        relationshipStatus(O', engaged(O)) age(O', N')
+        female(O)
+        neg(sister(O, O'))
+      if N > 15 /\ N' > 15 .
+
+
+    ---(
+    var BABY : String .
+    crl [girlBirth] :
+        relationshipStatus(FATHER, married(MOTHER)) age(FATHER, N) male(FATHER)
+        relationshipStatus(MOTHER, married(FATHER)) age(MOTHER, N') female(MOTHER)
+        Girlnames(L BABY L')
+      =>
+        relationshipStatus(FATHER, married(MOTHER)) age(FATHER, N) male(FATHER)
+        relationshipStatus(MOTHER, married(FATHER)) age(MOTHER, N') female(MOTHER)
+        Girlnames(L L') *** Unique names
+        relationshipStatus(BABY, single) age(BABY, 0) female(BABY)
+        parent(FATHER, BABY)
+        parent(MOTHER, BABY)
+      if  N' < 60 .
+
+    crl [boyBirth] :
+        relationshipStatus(FATHER, married(MOTHER)) age(FATHER, N) male(FATHER)
+        relationshipStatus(MOTHER, married(FATHER)) age(MOTHER, N') female(MOTHER)
+        Boynames(L BABY L')
+      =>
+        relationshipStatus(FATHER, married(MOTHER)) age(FATHER, N) male(FATHER)
+        relationshipStatus(MOTHER, married(FATHER)) age(MOTHER, N') female(MOTHER)
+        Boynames(L L') *** Unique names
+        relationshipStatus(BABY, single) age(BABY, 0) male(BABY)
+        parent(FATHER, BABY)
+        parent(MOTHER, BABY)
+      if  N' < 60 .
+
+    rl [separationInit] :
+        relationshipStatus(O, married(O'))
+      =>
+        relationshipStatus(O, separated(O'))
+        separate(O') .
+
+    *** frewrite virker å være bugga da separate(X) meldingen ikke blir borte
+    rl [acceptSeparation] :
+        separate(X)
+        relationshipStatus(X, married(X'))
+      =>
+        relationshipStatus(X, separated(X')) .
+
+    rl [marriage] : 
+        relationshipStatus(O, engaged(O'))
+        relationshipStatus(O', engaged(O))
+      =>
+        relationshipStatus(O, married(O'))
+        relationshipStatus(O', married(O)) .
+
+    rl [divorce] :
+        relationshipStatus(O, separated(O'))
+        relationshipStatus(O', separated(O))
+      =>
+        relationshipStatus(O, single)
+        relationshipStatus(O', single) .
+  
+    rl [birthday] :
+        age(O, N)
+      =>
+        age(O, N + 1) .
+    )
+
+
+    ops greeks greekStatus : -> Configuration .
+    ---(
+    eq greeks =
+        < "PossibleNames" : Names | OKnames: "Hera" "Zeus" "Hades" >
+        < "Gaia" : Person | age: 999, status: married("Uranus") >
+        < "Uranus" : Person | age: 900, status: married("Gaia") >
+        < "Kronos" : Person | age: 800, status: married("Rhea") >
+        < "Rhea" : Person | age: 21, status: married("Kronos") > .
+    )
+    eq greeks =
+        Boynames("Zeus" "Hades")
+        Girlnames("Hera")
+        female("Gaia") age("Gaia", 999) relationshipStatus("Gaia", married("Uranus"))
+        male("Uranus") age("Uranus", 900) relationshipStatus("Uranus", married("Gaia"))
+        male("Kronos") age("Kronos", 800) relationshipStatus("Kronos", married("Rhea"))
+        female("Rhea") age("Rhea", 21) relationshipStatus("Rhea", married("Kronos")) .
+
+    eq greekStatus =
+        relationshipStatus("Gaia", married("Uranus")) age("Gaia", 999)
+        relationshipStatus("Uranus", married("Gaia")) age("Uranus", 900)
+        relationshipStatus("Kronos", married("Rhea")) age("Kronos", 800)
+        relationshipStatus("Rhea", married("Kronos")) age("Rhea", 21) .
+
+    op testMarriage : -> Configuration .
+    eq testMarriage =
+        relationshipStatus("Gaia", single) age("Gaia", 999)
+        neg(sister("Gaia", "Uranus")) female("Gaia")
+        relationshipStatus("Uranus", single) age("Uranus", 900)
+        neg(brother("Uranus", "Gaia")) male("Uranus") .
+
+    op testBool : -> Configuration .
+    eq testBool =
+        birthday("Gaia") age("Gaia", 100) neg(birthday("Gaia"))
+        neg(birthday("Gaia")) .
+
+endm
+
+
+--- search =>* female("Hera") C:Configuration
+--- funker ikke fordi spesifikasjonen ikke er terminerende. bruk heller:
+--- search [1] =>* female("Hera") C:Configuration
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
