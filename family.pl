@@ -1,3 +1,5 @@
+% -*-Prolog-*-
+
 male(thomas).
 male(rolf).
 female(anna).
