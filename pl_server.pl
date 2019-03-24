@@ -13,10 +13,6 @@ parent(rolf, maria).
 father(X, Y) :- parent(X, Y), male(X).
 mother(X, Y) :- parent(X, Y), female(X).
 
-%test_socket( :-
-    %tcp_socket(Socket),
-    %tcp_bind(Socket, 8532).
-
 create_server(Port) :-
     tcp_socket(Socket),
     tcp_bind(Socket, localhost:Port),
@@ -45,17 +41,26 @@ process_client(Socket) :-
 
 % this will accept one message from the client and then process_client() will close the socket
 handle_service(StreamPair) :-
-    %read(StreamPair, T),
     read_line_to_codes(StreamPair, Codes), % reads message into an array of character codes or something
-    format(StreamPair, '~n~s~n', [Codes]). % send message back with newline before and after
-    %readln(StreamPair, T), does not work
+    %format(StreamPair, '~n~s~n', [Codes]), % send message back with newline before and after
 
-    % TODO: need to figure out how to write result of a query to socket
-    %format(StreamPair, '~s~n', mother(maria, anna)),
-    %with_output_to(StreamPair, mother(maria, anna)).
-    %write(StreamPair, mother(maria, anna)) :-
-        %mother(maria, anna).
+    % transforms codes into a term (which can be used as a query)
+    read_term_from_codes(Codes, Query, []),
+
+    % writes reply back to client
+    (positive_reply(StreamPair, Query);
+     negative_reply(StreamPair, Query)).
 
 
 
-write
+% reply with query if true
+positive_reply(StreamPair, Query) :-
+    Query,
+    format(StreamPair, '~w~n', Query).
+
+% reply with neg(query) if false
+negative_reply(StreamPair, Query) :-
+    \+ Query,
+    format(StreamPair, 'neg(~w)~n', Query).
+
+
