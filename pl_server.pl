@@ -18,18 +18,19 @@ create_server(Port) :-
     tcp_bind(Socket, localhost:Port),
     tcp_listen(Socket, 5),
     tcp_open_socket(Socket, AcceptFd, _), % master socket
-    dispatch(AcceptFd),
-    tcp_close_socket(Socket). % closes the master socket
+    dispatch(AcceptFd).
+    %print("TEST"),
+    %tcp_close_socket(Socket). % closes the master socket
 
 dispatch(AcceptFd) :-
     % Socket: identifier for client
     % Peer: IP-address of client
 
     % programmet stopper, men siden porten er åpna får man fortsatt tilgang til den
-    % via telnet
+    % via neg(father(maria,anna))telnet
     tcp_accept(AcceptFd, Socket, Peer), % accepted socket
-    thread_create(process_client(Socket), _, [ detached(true)]).
-    %dispatch(AcceptFd). % loops dispatch
+    thread_create(process_client(Socket), _, [ detached(true)]),
+    dispatch(AcceptFd). % loops dispatch
 
 process_client(Socket) :-
     % setup_call_cleanup(Setup, Goal, Cleanup)
