@@ -1,3 +1,6 @@
+load parse_msg.maude
+load socket.maude
+
 fmod STRING-LIST is
     protecting STRING .
 
@@ -10,12 +13,14 @@ endfm
 mod OO-POPULATION is
     protecting NAT .
     protecting STRING-LIST .
+    protecting PARSE-MSG .
+    protecting SOCKET .
 
     *** Objects, messages, object names, and configurations:
-    sorts Oid Object Msg Configuration .
-    subsorts Object Msg < Configuration .
-    op none : -> Configuration [ctor] .
-    op __ : Configuration Configuration -> Configuration [ctor assoc comm id: none] .
+    --- sorts Oid Object Msg Configuration .
+    --- subsorts Object Msg < Configuration .
+    --- op none : -> Configuration [ctor] .
+    --- op __ : Configuration Configuration -> Configuration [ctor assoc comm id: none] .
 
     subsort String < Oid .
 
@@ -26,26 +31,24 @@ mod OO-POPULATION is
     op single : -> Status [ctor] .
     ops engaged married separated : Oid -> Status [ctor] .
     
-    *** Classes:
-    ---op <_: Names | OKnames:_> : Oid StringList -> Object [ctor] .
-    ---op <_: Person | age:_, status:_> : Oid Nat Status -> Object [ctor] .
-
-    *** Use only messages instead to begin with (more similar to prolog)
     ops Boynames Girlnames : StringList -> Msg .
     op relationshipStatus : Oid Status -> Msg .
     op age : Oid Nat -> Msg .
-
-    ---op parent : Oid Oid -> Msg .
-    ---ops male female : Oid -> Msg .
-    op parent : Oid Oid -> Bool .
-    ops male female : Oid -> Bool .
-
-    *** these must be deduced by prolog program family.pl
-    ops father mother brother sister uncle aunt grandfather grandmother : Oid Oid -> Bool .
-
-    subsort Bool < Msg .
     op birthday : Oid -> Bool .
-    op neg : Bool -> Bool .
+
+    ---op parent : Oid Oid -> Bool .
+    ---ops male female : Oid -> Bool .
+    *** these must be deduced by prolog program family.pl
+    ---ops father mother brother sister uncle aunt grandfather grandmother : Oid Oid -> Bool .
+
+    ---subsort Bool < Msg .
+    ---op neg : Bool -> Bool .
+
+    *** Socket stuff
+    op Client : -> Cid .
+    op aClient : -> Oid .
+
+
 
 
     *** need some way of saying if the terms brother(O, O') or (not brother(O, O')) does not exist,
@@ -62,12 +65,6 @@ mod OO-POPULATION is
     vars O O' : Oid .
 
 
-    crl [test] :
-        age(O, N)
-      =>
-        age(O, N + 1)
-      if birthday(O) .
-
     rl [bday] :
         age(O, N)
         birthday(O)
@@ -81,29 +78,14 @@ mod OO-POPULATION is
         age(O, N + 5) .
 
 
-    *** siblings can not be engaged
-    crl [engagement_male] :
+    crl [engagement] :
         relationshipStatus(O, single) age(O, N)
         relationshipStatus(O', single) age(O', N')
-        male(O)
-        neg(brother(O, O'))
+        neg(sibling(O, O')) *** siblings can not be engaged (this term can be missing)
       =>
         relationshipStatus(O, engaged(O')) age(O, N)
         relationshipStatus(O', engaged(O)) age(O', N')
-        male(O)
-        neg(brother(O, O'))
-      if N > 15 /\ N' > 15 .
-
-    crl [engagement_female] :
-        relationshipStatus(O, single) age(O, N)
-        relationshipStatus(O', single) age(O', N')
-        female(O)
-        neg(sister(O, O'))
-      =>
-        relationshipStatus(O, engaged(O')) age(O, N)
-        relationshipStatus(O', engaged(O)) age(O', N')
-        female(O)
-        neg(sister(O, O'))
+        neg(sibling(O, O'))
       if N > 15 /\ N' > 15 .
 
 
@@ -169,15 +151,46 @@ mod OO-POPULATION is
     )
 
 
+    vars CLIENT : Oid .
+    var A : AttributeSet .
+    vars IP MSG : String .
+    vars PORT : Nat .
+
+  *** Socket-related rules
+
+    op createClientSocket : String Nat -> Msg .
+    
+    rl [createSocket] :
+	      < O : Client | A >
+        createClientSocket(IP, PORT)
+      =>
+	      < O : Client | A >
+        createClientTcpSocket(socketManager, O, IP, PORT) .
+
+    --- må ha disse i alle regler hvor kommunikasjon med serveren er nødvendig
+    rl [createdSocket] :
+	      < O : Client | A >
+        createdSocket(O, socketManager, CLIENT)
+      =>
+        < O : Client | A >
+        send(CLIENT, O, "sibling(thomas, maria)\n") .
+
+    rl [sent] :
+	      < O : Client | A >
+        sent(O, CLIENT)
+      =>
+        < O : Client | A >
+        receive(CLIENT, O) .
+
+    --- divide factorial result by two and send it back to server
+    rl [receivedReply] :
+	      < O : Client | A >
+        received(O, CLIENT, MSG)
+      => 
+	      < O : Client | A > 
+        msgToTerm(MSG) .
+
     ops greeks greekStatus : -> Configuration .
-    ---(
-    eq greeks =
-        < "PossibleNames" : Names | OKnames: "Hera" "Zeus" "Hades" >
-        < "Gaia" : Person | age: 999, status: married("Uranus") >
-        < "Uranus" : Person | age: 900, status: married("Gaia") >
-        < "Kronos" : Person | age: 800, status: married("Rhea") >
-        < "Rhea" : Person | age: 21, status: married("Kronos") > .
-    )
     eq greeks =
         Boynames("Zeus" "Hades")
         Girlnames("Hera")
@@ -204,6 +217,16 @@ mod OO-POPULATION is
         birthday("Gaia") age("Gaia", 100) neg(birthday("Gaia"))
         neg(birthday("Gaia")) .
 
+    op testPL : -> Configuration .
+    eq testPL =
+        <> < aClient : Client | none > createClientSocket("localhost", 3050)
+        male("thomas") age("thomas", 35) relationshipStatus("thomas", single)
+        male("rolf") age("rolf", 60) relationshipStatus("rolf", single)
+        female("anna") age("anna", 14) relationshipStatus("anna", single)
+        female("maria") age("maria", 35) relationshipStatus("maria", single)
+        parent("thomas", "anna")
+        parent("maria", "anna")
+        parent("rolf", "maria") .
 endm
 
 

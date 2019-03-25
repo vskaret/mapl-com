@@ -1,0 +1,81 @@
+mod PARSE-MSG is
+    protecting STRING .
+    protecting INT .
+    protecting CONFIGURATION .
+
+    *** Every ground term in a module (every term without variables) is a constructor [ctor]
+
+    subsort Bool < Msg .
+
+    op parent : String String -> Bool .
+    ops male female birthday : String -> Bool .
+    ops father mother brother sister uncle aunt grandfather grandmother : String String -> Bool .
+    op sibling : String String -> Bool .
+    op neg : Bool -> Bool .
+
+    ops firstPar lastPar comma : String -> Nat .
+    ops removeOuter firstArg secondArg : String -> String .
+    ops msgToTerm innerTerm : String -> Bool .
+
+    ops isNeg isMale isFemale isFather isMother isBrother : String -> Bool .
+    ops isSister isUncle isAunt isGrandfather isGrandmother : String -> Bool .
+    op isSibling : String -> Bool .
+
+    vars S S'  : String .
+
+
+    *** finds positions of first '(', last ')' and first ','
+    eq firstPar(S) = find(S, "(", 0) .
+    eq lastPar(S) = rfind(S, ")", length(S)) .
+    eq comma(S) = find(S, ",", 0) .
+
+    *** removes outer parentheses: "neg(mother(anne, kim))" = "mother(anne, kim)" 
+    eq removeOuter(S) = substr(S, firstPar(S) + 1, lastPar(S) - firstPar(S) - 1) .
+
+    *** gets first part of a string separated by comma: "abc,def" = "abc"
+    eq firstArg(S) = substr(removeOuter(S), 0, comma(removeOuter(S))) .
+
+    *** gets second part of a string separated by comma: "abc,def" = "def"
+    eq secondArg(S) = substr(
+          removeOuter(S),
+          comma(removeOuter(S)) + 1,
+          length(removeOuter(S)) - comma(removeOuter(S))) .
+
+
+    *** these equations checks what kind of term it is: isNeg("neg(male(rolf))") = true
+    eq isNeg(S) = if find(S, "neg(", 0) == 0 then true else false fi .
+    eq isMale(S) = if find(S, "male(", 0) == 0 then true else false fi .
+    eq isFemale(S) = if find(S, "female(", 0) == 0 then true else false fi .
+    eq isFather(S) = if find(S, "father(", 0) == 0 then true else false fi .
+    eq isMother(S) = if find(S, "mother(", 0) == 0 then true else false fi .
+    eq isBrother(S) = if find(S, "brother(", 0) == 0 then true else false fi .
+    eq isSister(S) = if find(S, "sister(", 0) == 0 then true else false fi .
+    eq isUncle(S) = if find(S, "uncle(", 0) == 0 then true else false fi .
+    eq isAunt(S) = if find(S, "aunt(", 0) == 0 then true else false fi .
+    eq isGrandfather(S) = if find(S, "grandfather(", 0) == 0 then true else false fi .
+    eq isGrandmother(S) = if find(S, "grandmother(", 0) == 0 then true else false fi .
+    eq isSibling(S) = if find(S, "sibling(", 0) == 0 then true else false fi .
+
+
+    *** when parsing a string, first check for neg() and then check what kind of term it is
+    eq msgToTerm(S) = if isNeg(S)
+        then neg(innerTerm(removeOuter(S)))
+        else innerTerm(S) fi .
+
+    *** these turns a string into a term: "male(rolf)" = male("rolf")
+    ceq innerTerm(S) = male(removeOuter(S)) if isMale(S) .
+    ceq innerTerm(S) = female(removeOuter(S)) if isFemale(S) .
+    ceq innerTerm(S) = father(firstArg(S), secondArg(S)) if isFather(S) .
+    ceq innerTerm(S) = mother(firstArg(S), secondArg(S)) if isMother(S) .
+    ceq innerTerm(S) = brother(firstArg(S), secondArg(S)) if isBrother(S) .
+    ceq innerTerm(S) = sister(firstArg(S), secondArg(S)) if isSister(S) .
+    ceq innerTerm(S) = uncle(firstArg(S), secondArg(S)) if isUncle(S) .
+    ceq innerTerm(S) = aunt(firstArg(S), secondArg(S)) if isAunt(S) .
+    ceq innerTerm(S) = grandfather(firstArg(S), secondArg(S)) if isGrandfather(S) .
+    ceq innerTerm(S) = grandmother(firstArg(S), secondArg(S)) if isGrandmother(S) .
+    ceq innerTerm(S) = sibling(firstArg(S), secondArg(S)) if isSibling(S) .
+    eq innerTerm(S) = "innerTermError(" + S + ")" [owise] .
+
+endm
+
+

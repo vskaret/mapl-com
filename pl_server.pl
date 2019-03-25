@@ -13,6 +13,16 @@ parent(rolf, maria).
 father(X, Y) :- parent(X, Y), male(X).
 mother(X, Y) :- parent(X, Y), female(X).
 
+brother(X, Y) :- parent(Z, X), parent(Z, Y), male(X), X\=Y.
+sister(X, Y) :- parent(Z, X), parent(Z, Y), female(X), X\=Y.
+sibling(X, Y) :- brother(X, Y); sister(X, Y) .
+
+uncle(X, Y) :- brother(X, Z), parent(Z, Y).
+aunt(X, Y) :- sister(X, Z), parent(Z, Y).
+
+grandfather(X, Z) :- father(X, Y), parent(Y, Z).
+grandmother(X, Z) :- mother(X, Y), parent(Y, Z).
+
 create_server(Port) :-
     tcp_socket(Socket),
     tcp_bind(Socket, localhost:Port),
@@ -40,6 +50,9 @@ process_client(Socket) :-
         handle_service(StreamPair),
         close(StreamPair)).
 
+    %tcp_open_socket(Socket, StreamPair),
+    %handle_service(StreamPair).
+
 % this will accept one message from the client and then process_client() will close the socket
 handle_service(StreamPair) :-
     read_line_to_codes(StreamPair, Codes), % reads message into an array of character codes or something
@@ -48,20 +61,33 @@ handle_service(StreamPair) :-
     % transforms codes into a term (which can be used as a query)
     read_term_from_codes(Codes, Query, []),
 
-    % writes reply back to client
-    (positive_reply(StreamPair, Query);
-     negative_reply(StreamPair, Query)).
+    writeln(Query),
 
+    % writes reply back to client
+    reply(StreamPair, Query).
+
+    %handle_service(StreamPair).
+
+
+reply(StreamPair, Query) :-
+    (Query\=end_of_file,
+     (positive_reply(StreamPair, Query);
+      negative_reply(StreamPair, Query)));
+    eof_error_reply(StreamPair).
 
 
 % reply with query if true
 positive_reply(StreamPair, Query) :-
     Query,
-    format(StreamPair, '~w~n', Query).
+    format(StreamPair, '~w~w', [Query, end_of_file]).
 
 % reply with neg(query) if false
 negative_reply(StreamPair, Query) :-
     \+ Query,
-    format(StreamPair, 'neg(~w)~n', Query).
+    format(StreamPair, 'neg(~w)~w', [Query, end_of_file]).
+
+eof_error_reply(StreamPair) :-
+    format(StreamPair, 'eof_error~w', [end_of_file]).
+
 
 
