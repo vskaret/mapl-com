@@ -156,24 +156,28 @@ mod OO-POPULATION is
     vars IP MSG : String .
     vars PORT : Nat .
 
-  *** Socket-related rules
+    *** Socket-related rules
 
     op createClientSocket : String Nat -> Msg .
+    op plQuery : String String Nat -> Msg . *** Prolog Query, IP, PORT
+    op plMsg : String -> Msg .
     
     rl [createSocket] :
+        plQuery(MSG, IP, PORT)
 	      < O : Client | A >
-        createClientSocket(IP, PORT)
       =>
+        plMsg(MSG)
 	      < O : Client | A >
         createClientTcpSocket(socketManager, O, IP, PORT) .
 
-    --- må ha disse i alle regler hvor kommunikasjon med serveren er nødvendig
+    --- må ha disse i alle regler hvor kommunikasjon med serveren er nødvendig?
     rl [createdSocket] :
 	      < O : Client | A >
         createdSocket(O, socketManager, CLIENT)
+        plMsg(MSG)
       =>
         < O : Client | A >
-        send(CLIENT, O, "sibling(thomas, maria)\n") .
+        send(CLIENT, O, MSG) .
 
     rl [sent] :
 	      < O : Client | A >
@@ -182,7 +186,7 @@ mod OO-POPULATION is
         < O : Client | A >
         receive(CLIENT, O) .
 
-    --- divide factorial result by two and send it back to server
+    --- transform message received from prolog server to a term
     rl [receivedReply] :
 	      < O : Client | A >
         received(O, CLIENT, MSG)
@@ -217,9 +221,10 @@ mod OO-POPULATION is
         birthday("Gaia") age("Gaia", 100) neg(birthday("Gaia"))
         neg(birthday("Gaia")) .
 
-    op testPL : -> Configuration .
-    eq testPL =
-        <> < aClient : Client | none > createClientSocket("localhost", 3050)
+    op testPL : Nat -> Configuration .
+    op testPL2 : Nat -> Configuration .
+    eq testPL(PORT) =
+        <> < aClient : Client | none > createClientSocket("localhost", PORT)
         male("thomas") age("thomas", 35) relationshipStatus("thomas", single)
         male("rolf") age("rolf", 60) relationshipStatus("rolf", single)
         female("anna") age("anna", 14) relationshipStatus("anna", single)
@@ -227,6 +232,14 @@ mod OO-POPULATION is
         parent("thomas", "anna")
         parent("maria", "anna")
         parent("rolf", "maria") .
+        ---plQuery("sibling(rolf, maria)\n") .
+        ---plQuery("father(rolf, maria)\n") .
+
+    eq testPL2(PORT) =
+        <> < aClient : Client | none > ---createClientSocket("localhost", PORT)
+        plQuery("sibling(rolf, maria)\n", "localhost", PORT)
+        plQuery("father(rolf, maria)\n", "localhost", PORT)
+        plQuery("father(rolf, maria)\n", "localhost", PORT) .
 endm
 
 
