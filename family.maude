@@ -49,8 +49,11 @@ mod OO-POPULATION is
     op aClient : -> Oid .
 
 
-
-
+    *** Socket-related equations
+    op createClientSocket : String Nat -> Msg .
+    op plQuery : String String Nat -> Msg . *** Prolog Query, IP, PORT
+    op plMsg : String -> Msg .
+    
     *** need some way of saying if the terms brother(O, O') or (not brother(O, O')) does not exist,
     *** then the prolog server should be queried
     *** * use a function neg : Bool -> Bool (and subsort Bool < Msg) for not brother(O, O')
@@ -64,6 +67,26 @@ mod OO-POPULATION is
     vars C C' Conf : Configuration .
     vars O O' : Oid .
 
+    sort State .
+    ---subsort 
+    op {_} : Configuration -> State [ctor] .
+    op contains : Configuration State -> Bool .
+    eq contains(C, {none}) = false . --- plQuery(c)
+    eq contains(C, {C' Conf}) = if C == C' then true else contains(C, {Conf}) fi . 
+    ---ceq contains(C, C' Conf) = true ---[print "C = " C]
+        ---if C == C' [print "C = " C] .
+    ---ceq contains(C, C' Conf) = contains(C, Conf) ---[print "C == " C]
+        ---if C =/= C' [print "C == " C] .
+
+
+    ---(
+    op notSibling : String String Configuration -> Bool .
+    eq notSibling(O, O', C) = if plContains(C, sibling(O, O'))
+        then false
+        else (if plContains(C, neg(sibling(O, O')))
+            then true
+            else plQuery("sibling(" + O + "," + O' + ")\n", "localhost", 3050) fi) fi .
+    )
 
     rl [bday] :
         age(O, N)
@@ -78,16 +101,34 @@ mod OO-POPULATION is
         age(O, N + 5) .
 
 
+
+    ---(
     crl [engagement] :
         relationshipStatus(O, single) age(O, N)
         relationshipStatus(O', single) age(O', N')
-        neg(sibling(O, O')) *** siblings can not be engaged (this term can be missing)
+        C
+        ---neg(sibling(O, O')) *** siblings can not be engaged (this term can be missing)
       =>
         relationshipStatus(O, engaged(O')) age(O, N)
         relationshipStatus(O', engaged(O)) age(O', N')
-        neg(sibling(O, O'))
-      if N > 15 /\ N' > 15 .
+        C
+        ---neg(sibling(O, O'))
+      ---if N > 15 /\ N' > 15 /\ notSibling(O, O', C) .
+      if notSibling(O, O', C) .
+      )
 
+    crl [engagement] :
+        { relationshipStatus(O, single) ---age(O, N)
+        relationshipStatus(O', single) ---age(O', N')
+        Conf }
+        ---neg(sibling(O, O')) *** siblings can not be engaged (this term can be missing)
+      =>
+        { relationshipStatus(O, engaged(O')) ---age(O, N)
+        relationshipStatus(O', engaged(O)) ---age(O', N')
+        Conf }
+        ---neg(sibling(O, O'))
+      ---if N > 15 /\ N' > 15 /\ notSibling(O, O', C) .
+      if contains(neg(sibling(O, O')), {Conf}) or contains(neg(sibling(O', O)), {Conf}) .
 
     ---(
     var BABY : String .
@@ -156,11 +197,6 @@ mod OO-POPULATION is
     vars IP MSG : String .
     vars PORT : Nat .
 
-    *** Socket-related rules
-
-    op createClientSocket : String Nat -> Msg .
-    op plQuery : String String Nat -> Msg . *** Prolog Query, IP, PORT
-    op plMsg : String -> Msg .
     
     rl [createSocket] :
         plQuery(MSG, IP, PORT)
@@ -194,6 +230,24 @@ mod OO-POPULATION is
 	      < O : Client | A > 
         msgToTerm(MSG) .
 
+    crl [engagementQuery] :
+        { relationshipStatus(X, single)
+        relationshipStatus(X', single)
+        Conf }
+      =>
+        { relationshipStatus(X, single)
+        relationshipStatus(X', single)
+        Conf
+        plQuery("sibling(" + X + "," + X' + ")\n", "localhost", 3055) }
+      if not (contains(sibling(X, X'), {Conf}))
+          /\ not (contains(sibling(X', X), {Conf}))
+          /\ not (contains(neg(sibling(X, X')), {Conf})) 
+          /\ not (contains(neg(sibling(X', X)), {Conf})) 
+          /\ not (contains(plQuery("sibling(" + X + "," + X' + ")\n", "localhost", 3055), {Conf}))
+          /\ not (contains(plQuery("sibling(" + X' + "," + X + ")\n", "localhost", 3055), {Conf}))
+          /\ not (contains(plMsg("sibling(" + X + "," + X' + ")\n"), {Conf}))
+          /\ not (contains(plMsg("sibling(" + X' + "," + X + ")\n"), {Conf})) .
+
     ops greeks greekStatus : -> Configuration .
     eq greeks =
         Boynames("Zeus" "Hades")
@@ -221,8 +275,7 @@ mod OO-POPULATION is
         birthday("Gaia") age("Gaia", 100) neg(birthday("Gaia"))
         neg(birthday("Gaia")) .
 
-    op testPL : Nat -> Configuration .
-    op testPL2 : Nat -> Configuration .
+    ops testPL testPL2 test : Nat -> Configuration .
     eq testPL(PORT) =
         <> < aClient : Client | none > createClientSocket("localhost", PORT)
         male("thomas") age("thomas", 35) relationshipStatus("thomas", single)
@@ -236,10 +289,20 @@ mod OO-POPULATION is
         ---plQuery("father(rolf, maria)\n") .
 
     eq testPL2(PORT) =
-        <> < aClient : Client | none > ---createClientSocket("localhost", PORT)
-        plQuery("sibling(rolf, maria)\n", "localhost", PORT)
-        plQuery("father(rolf, maria)\n", "localhost", PORT)
-        plQuery("father(rolf, maria)\n", "localhost", PORT) .
+        <> < aClient : Client | none >
+        male("thomas") male("rolf") female("anna") female("maria")
+        parent("thomas", "anna") parent("maria", "anna") parent("rolf", "maria")
+        relationshipStatus("thomas", single)
+        relationshipStatus("rolf", single)
+        relationshipStatus("anna", single)
+        relationshipStatus("maria", single) .
+
+    eq test(PORT) =
+        <> < aClient : Client | none >
+        male("thomas") female("anna")
+        parent("thomas", "anna")
+        relationshipStatus("thomas", single)
+        relationshipStatus("anna", single) .
 endm
 
 
