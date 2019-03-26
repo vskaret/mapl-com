@@ -1,0 +1,47 @@
+* mapl-com (maude prolog communication)
+
+This is a simple example of a maude program querying a prolog server for facts.
+
+* Running the example
+** First start the prolog server:
+$ swipl
+?- [pl_server].
+?- create_server(3050).
+** Then run the maude client:
+$ maude
+Maude> in family.maude .
+Maude> erew {test(3050)} .
+Maude> erew {test2(3050)} .
+Maude> erew {test3(3050)} .
+
+Where test is the specification:
+<> < aClient : Client | none >
+male("thomas") female("anna")
+relationshipStatus("thomas", single)
+relationshipStatus("anna", single)
+
+test2 is:
+<> < aClient : Client | none >
+male("thomas") female("anna") female("anna")
+relationshipStatus("thomas", single)
+relationshipStatus("anna", single)
+relationshipStatus("anna", single)
+
+test3 is:
+<> < aClient : Client | none >
+male("thomas") female("anna") female("anna") female("maria")
+relationshipStatus("thomas", single)
+relationshipStatus("anna", single)
+relationshipStatus("anna", single)
+relationshipStatus("maria", single)
+
+* The use case
+The point of the examples is to see if anyone will get engaged. The maude program has a conditional
+rewrite rule for engagements where the people getting engaged can't be siblings and none of them can
+be the parent of the other. Who's the parent of who is not known to maude, but is stored as facts on the
+prolog server:
+parent(thomas, anna).
+parent(maria, anna).
+parent(rolf, maria).
+
+Maude has to query for these facts during execution to figure out if anyone can get engaged.
