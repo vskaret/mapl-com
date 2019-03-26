@@ -1,26 +1,11 @@
 load parse_msg.maude
 load socket.maude
 
-fmod STRING-LIST is
-    protecting STRING .
-
-    sort StringList .
-    subsort String < StringList .
-    op nil : -> StringList [ctor] .
-    op __ : StringList StringList -> StringList [ctor assoc id: nil] .
-endfm
-
 mod OO-POPULATION is
     protecting NAT .
     protecting STRING-LIST .
     protecting PARSE-MSG .
     protecting SOCKET .
-
-    *** Objects, messages, object names, and configurations:
-    --- sorts Oid Object Msg Configuration .
-    --- subsorts Object Msg < Configuration .
-    --- op none : -> Configuration [ctor] .
-    --- op __ : Configuration Configuration -> Configuration [ctor assoc comm id: none] .
 
     subsort String < Oid .
 
@@ -30,24 +15,11 @@ mod OO-POPULATION is
     sort Status .
     op single : -> Status [ctor] .
     ops engaged married separated : Oid -> Status [ctor] .
-    
-    ops Boynames Girlnames : StringList -> Msg .
     op relationshipStatus : Oid Status -> Msg .
-    op age : Oid Nat -> Msg .
-    op birthday : Oid -> Bool .
-
-    ---op parent : Oid Oid -> Bool .
-    ---ops male female : Oid -> Bool .
-    *** these must be deduced by prolog program family.pl
-    ---ops father mother brother sister uncle aunt grandfather grandmother : Oid Oid -> Bool .
-
-    ---subsort Bool < Msg .
-    ---op neg : Bool -> Bool .
 
     *** Socket stuff
     op Client : -> Cid .
     op aClient : -> Oid .
-
 
     *** Socket-related equations
     op createClientSocket : String Nat -> Msg .
@@ -59,25 +31,18 @@ mod OO-POPULATION is
     *** * use a function neg : Bool -> Bool (and subsort Bool < Msg) for not brother(O, O')
     *** * then use the contains function to check if neither of brother(O, O') nor neg(brother(O, O') exists, then query prolog
 
-    vars X X' X'' X''' X'''' : String .
+    vars X X' X'' X''' X'''' NAME1 NAME2 : String .
     vars FATHER MOTHER : Oid .
     vars N N' : Nat .
     vars S S' : Status .
-    vars L L' L'' : StringList .
     vars C C' Conf : Configuration .
     vars O O' : Oid .
 
     sort State .
-    ---subsort 
     op {_} : Configuration -> State [ctor] .
     op contains : Configuration State -> Bool .
     eq contains(C, {none}) = false . --- plQuery(c)
     eq contains(C, {C' Conf}) = if C == C' then true else contains(C, {Conf}) fi . 
-    ---ceq contains(C, C' Conf) = true ---[print "C = " C]
-        ---if C == C' [print "C = " C] .
-    ---ceq contains(C, C' Conf) = contains(C, Conf) ---[print "C == " C]
-        ---if C =/= C' [print "C == " C] .
-
 
     crl [engagement] :
         { relationshipStatus(O, single) ---age(O, N)
@@ -91,71 +56,11 @@ mod OO-POPULATION is
           /\ contains(neg(parent(O, O')), {Conf})
           /\ contains(neg(parent(O', O)), {Conf}) .
 
-    ---(
-    var BABY : String .
-    crl [girlBirth] :
-        relationshipStatus(FATHER, married(MOTHER)) age(FATHER, N) male(FATHER)
-        relationshipStatus(MOTHER, married(FATHER)) age(MOTHER, N') female(MOTHER)
-        Girlnames(L BABY L')
-      =>
-        relationshipStatus(FATHER, married(MOTHER)) age(FATHER, N) male(FATHER)
-        relationshipStatus(MOTHER, married(FATHER)) age(MOTHER, N') female(MOTHER)
-        Girlnames(L L') *** Unique names
-        relationshipStatus(BABY, single) age(BABY, 0) female(BABY)
-        parent(FATHER, BABY)
-        parent(MOTHER, BABY)
-      if  N' < 60 .
-
-    crl [boyBirth] :
-        relationshipStatus(FATHER, married(MOTHER)) age(FATHER, N) male(FATHER)
-        relationshipStatus(MOTHER, married(FATHER)) age(MOTHER, N') female(MOTHER)
-        Boynames(L BABY L')
-      =>
-        relationshipStatus(FATHER, married(MOTHER)) age(FATHER, N) male(FATHER)
-        relationshipStatus(MOTHER, married(FATHER)) age(MOTHER, N') female(MOTHER)
-        Boynames(L L') *** Unique names
-        relationshipStatus(BABY, single) age(BABY, 0) male(BABY)
-        parent(FATHER, BABY)
-        parent(MOTHER, BABY)
-      if  N' < 60 .
-
-    rl [separationInit] :
-        relationshipStatus(O, married(O'))
-      =>
-        relationshipStatus(O, separated(O'))
-        separate(O') .
-
-    *** frewrite virker å være bugga da separate(X) meldingen ikke blir borte
-    rl [acceptSeparation] :
-        separate(X)
-        relationshipStatus(X, married(X'))
-      =>
-        relationshipStatus(X, separated(X')) .
-
-    rl [marriage] : 
-        relationshipStatus(O, engaged(O'))
-        relationshipStatus(O', engaged(O))
-      =>
-        relationshipStatus(O, married(O'))
-        relationshipStatus(O', married(O)) .
-
-    rl [divorce] :
-        relationshipStatus(O, separated(O'))
-        relationshipStatus(O', separated(O))
-      =>
-        relationshipStatus(O, single)
-        relationshipStatus(O', single) .
-  
-    rl [birthday] :
-        age(O, N)
-      =>
-        age(O, N + 1) .
-    )
 
 
-    vars CLIENT SOCKET : Oid .
+    vars SOCKET : Oid .
     var A : AttributeSet .
-    vars IP MSG : String .
+    vars IP MSG PLMSG QUERY : String .
     vars PORT : Nat .
 
 
@@ -181,29 +86,29 @@ mod OO-POPULATION is
     ***   QUERY is a substring of PLMSG
     
     rl [createSocket] :
-        plQuery(MSG, IP, PORT)
+        plQuery(QUERY, IP, PORT)
 	      < O : Client | A >
       =>
-        plMsg(MSG)
+        plMsg(QUERY)
 	      < O : Client | A >
         createClientTcpSocket(socketManager, O, IP, PORT) .
 
     --- må ha disse i alle regler hvor kommunikasjon med serveren er nødvendig?
     rl [createdSocket] :
 	      < O : Client | A >
-        createdSocket(O, socketManager, CLIENT)
-        plMsg(MSG)
+        createdSocket(O, socketManager, SOCKET)
+        plMsg(QUERY)
       =>
         < O : Client | A >
-        send(CLIENT, O, MSG)
-        pendingMsg(removeTrailingNewline(MSG)) .
+        send(SOCKET, O, QUERY)
+        pendingMsg(removeTrailingNewline(QUERY)) .
 
     rl [sent] :
 	      < O : Client | A >
-        sent(O, CLIENT)
+        sent(O, SOCKET)
       =>
         < O : Client | A >
-        receive(CLIENT, O) .
+        receive(SOCKET, O) .
 
     *** be careful, this could lead to unwanted behavior? ***
     op _substrof_ : String String -> Bool .
@@ -216,12 +121,12 @@ mod OO-POPULATION is
     --- transform message received from prolog server to a term
     crl [receivedReply] :
 	      < O : Client | A >
-        received(O, CLIENT, MSG)
-        pendingMsg(X)
+        received(O, SOCKET, PLMSG)
+        pendingMsg(QUERY)
       => 
 	      < O : Client | A > 
-        msgToTerm(MSG)
-        if X substrof MSG . *** make a better way to do this?
+        msgToTerm(PLMSG)
+        if QUERY substrof PLMSG . *** make a better way to do this?
       *** ^ doing it like this because
       *** if sent message is "sibling(anna,thomas)\n"
       *** the received message can be:
@@ -229,68 +134,61 @@ mod OO-POPULATION is
       *** * neg(sibling(anna,thomas))end_of_file
 
     crl [engagementSiblingQuery] :
-        { relationshipStatus(X, single)
-        relationshipStatus(X', single)
+        { relationshipStatus(NAME1, single)
+        relationshipStatus(NAME2, single)
         Conf }
       =>
-        { relationshipStatus(X, single)
-        relationshipStatus(X', single)
+        { relationshipStatus(NAME1, single)
+        relationshipStatus(NAME2, single)
         Conf
-        plQuery("sibling(" + X + "," + X' + ")\n", "localhost", 3055) }
-      if     not (contains(sibling(X, X'), {Conf}))
-          /\ not (contains(sibling(X', X), {Conf}))
-          /\ not (contains(neg(sibling(X, X')), {Conf})) 
-          /\ not (contains(neg(sibling(X', X)), {Conf})) 
-          /\ not (contains(plQuery("sibling(" + X + "," + X' + ")\n", "localhost", 3055), {Conf}))
-          /\ not (contains(plQuery("sibling(" + X' + "," + X + ")\n", "localhost", 3055), {Conf}))
-          /\ not (contains(plMsg("sibling(" + X + "," + X' + ")\n"), {Conf}))
-          /\ not (contains(plMsg("sibling(" + X' + "," + X + ")\n"), {Conf})) 
-          /\ not (contains(pendingMsg("sibling(" + X + "," + X' + ")"), {Conf})) 
-          /\ not (contains(pendingMsg("sibling(" + X' + "," + X + ")"), {Conf})) .
-          ---/\ not (contains(send(SOCKET, aClient, "sibling(" + X + "," + X' + ")\n"), {Conf})) .
+        plQuery("sibling(" + NAME1 + "," + NAME2 + ")\n", "localhost", 3055) }
+      if     not (contains(sibling(NAME1, NAME2), {Conf}))
+          /\ not (contains(sibling(NAME2, NAME1), {Conf}))
+          /\ not (contains(neg(sibling(NAME1, NAME2)), {Conf})) 
+          /\ not (contains(neg(sibling(NAME2, NAME1)), {Conf})) 
+          /\ not (contains(plQuery("sibling(" + NAME1 + "," + NAME2 + ")\n", "localhost", 3055), {Conf}))
+          /\ not (contains(plQuery("sibling(" + NAME2 + "," + NAME1 + ")\n", "localhost", 3055), {Conf}))
+          /\ not (contains(plMsg("sibling(" + NAME1 + "," + NAME2 + ")\n"), {Conf}))
+          /\ not (contains(plMsg("sibling(" + NAME2 + "," + NAME1 + ")\n"), {Conf})) 
+          /\ not (contains(pendingMsg("sibling(" + NAME1 + "," + NAME2 + ")"), {Conf})) 
+          /\ not (contains(pendingMsg("sibling(" + NAME2 + "," + NAME1 + ")"), {Conf})) .
 
     crl [engagementParentQuery] :
-        { relationshipStatus(X, single)
-        relationshipStatus(X', single)
+        { relationshipStatus(NAME1, single)
+        relationshipStatus(NAME2, single)
         Conf }
       =>
-        { relationshipStatus(X, single)
-        relationshipStatus(X', single)
+        { relationshipStatus(NAME1, single)
+        relationshipStatus(NAME2, single)
         Conf
-        plQuery("parent(" + X + "," + X' + ")\n", "localhost", 3055)
-        plQuery("parent(" + X' + "," + X + ")\n", "localhost", 3055) }
-      if     not (contains(parent(X, X'), {Conf}))
-          ---/\ not (contains(parent(X', X), {Conf}))
-          /\ not (contains(neg(parent(X, X')), {Conf})) 
-          ---/\ not (contains(neg(parent(X', X)), {Conf})) 
-          /\ not (contains(plQuery("parent(" + X + "," + X' + ")\n", "localhost", 3055), {Conf}))
-          ---/\ not (contains(plQuery("parent(" + X' + "," + X + ")\n", "localhost", 3055), {Conf}))
-          /\ not (contains(plMsg("parent(" + X + "," + X' + ")\n"), {Conf}))
-          ---/\ not (contains(plMsg("parent(" + X' + "," + X + ")\n"), {Conf}))
-          /\ not (contains(pendingMsg("parent(" + X + "," + X' + ")"), {Conf})) .
+        plQuery("parent(" + NAME1 + "," + NAME2 + ")\n", "localhost", 3055)
+        plQuery("parent(" + NAME2 + "," + NAME1 + ")\n", "localhost", 3055) }
+      if     not (contains(parent(NAME1, NAME2), {Conf}))
+          /\ not (contains(neg(parent(NAME1, NAME2)), {Conf})) 
+          /\ not (contains(plQuery("parent(" + NAME1 + "," + NAME2 + ")\n", "localhost", 3055), {Conf}))
+          /\ not (contains(plMsg("parent(" + NAME1 + "," + NAME2 + ")\n"), {Conf}))
+          /\ not (contains(pendingMsg("parent(" + NAME1 + "," + NAME2 + ")"), {Conf})) .
 
 
-    ops test2 test test3 : Nat -> Configuration .
+    ops test test2 test3 : Nat -> Configuration .
 
     eq test(PORT) =
         <> < aClient : Client | none >
         male("thomas") female("anna")
-        parent("thomas", "anna")
         relationshipStatus("thomas", single)
         relationshipStatus("anna", single) .
 
     eq test2(PORT) =
         <> < aClient : Client | none >
-        male("thomas") male("rolf") female("anna") female("maria")
-        ---parent("thomas", "anna") parent("maria", "anna") parent("rolf", "maria")
-        relationshipStatus("thomas", single)
+        male("rolf") female("maria") female("anna")
         relationshipStatus("rolf", single)
         relationshipStatus("anna", single)
         relationshipStatus("maria", single) .
 
     eq test3(PORT) =
         <> < aClient : Client | none >
-        male("rolf") female("maria") female("anna")
+        male("thomas") male("rolf") female("anna") female("maria")
+        relationshipStatus("thomas", single)
         relationshipStatus("rolf", single)
         relationshipStatus("anna", single)
         relationshipStatus("maria", single) .
