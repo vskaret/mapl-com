@@ -4,8 +4,8 @@ This is a simple example of a maude program querying a prolog server for facts.
 
 * Running the example
 ** First start the prolog server:
-$ swipl \\
-?- [pl_server]. \\\
+$ swipl \
+?- [pl_server]. \
 ?- create_server(3050).
 ** Then run the maude client:
 $ maude  
