@@ -4,36 +4,36 @@ This is a simple example of a maude program querying a prolog server for facts.
 
 * Running the example
 ** First start the prolog server:
-$ swipl\\
-?- [pl_server].\\
+$ swipl \\
+?- [pl_server]. \\
 ?- create_server(3050).
 ** Then run the maude client:
 $ maude  
-Maude> in family.maude .\\
-Maude> erew {test(3050)} .\\
-Maude> erew {test2(3050)} .\\
-Maude> erew {test3(3050)} .\\
+Maude> in family.maude . \\
+Maude> erew {test(3050)} . \\
+Maude> erew {test2(3050)} . \\
+Maude> erew {test3(3050)} . \\
 
 Where test is the specification:
-<> < aClient : Client | none >\\
-male("thomas") female("anna")\\
-relationshipStatus("thomas", single)\\
-relationshipStatus("anna", single)\\
+<> < aClient : Client | none > \\
+male("thomas") female("anna") \\
+relationshipStatus("thomas", single) \\
+relationshipStatus("anna", single) \\
 
 test2 is:
-<> < aClient : Client | none >\\
-male("thomas") female("anna") female("anna")\\
-relationshipStatus("thomas", single)\\
-relationshipStatus("anna", single)\\
-relationshipStatus("anna", single)\\
+<> < aClient : Client | none > \\
+male("thomas") female("anna") female("anna") \\
+relationshipStatus("thomas", single) \\
+relationshipStatus("anna", single) \\
+relationshipStatus("anna", single) \\
 
 test3 is:
-<> < aClient : Client | none >\\
-male("thomas") female("anna") female("anna") female("maria")\\
-relationshipStatus("thomas", single)\\
-relationshipStatus("anna", single)\\
-relationshipStatus("anna", single)\\
-relationshipStatus("maria", single)\\
+<> < aClient : Client | none > \\
+male("thomas") female("anna") female("anna") female("maria") \\
+relationshipStatus("thomas", single) \\
+relationshipStatus("anna", single) \\
+relationshipStatus("anna", single) \\
+relationshipStatus("maria", single) \\
 
 * The use case
 The point of the examples is to see if anyone will get engaged. The maude program has a conditional
