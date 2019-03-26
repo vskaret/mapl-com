@@ -10,16 +10,16 @@ mod PARSE-MSG is
     op parent : String String -> Bool .
     ops male female birthday : String -> Bool .
     ops father mother brother sister uncle aunt grandfather grandmother : String String -> Bool .
-    op sibling : String String -> Bool .
+    ops sibling parent : String String -> Bool .
     op neg : Bool -> Bool .
 
     ops firstPar lastPar comma : String -> Nat .
     ops removeOuter firstArg secondArg : String -> String .
-    ops msgToTerm innerTerm : String -> Bool .
+    ops msgToTerm innerTerm innerTermError : String -> Bool .
 
     ops isNeg isMale isFemale isFather isMother isBrother : String -> Bool .
     ops isSister isUncle isAunt isGrandfather isGrandmother : String -> Bool .
-    op isSibling : String -> Bool .
+    ops isSibling isParent : String -> Bool .
 
     vars S S'  : String .
 
@@ -55,6 +55,7 @@ mod PARSE-MSG is
     eq isGrandfather(S) = if find(S, "grandfather(", 0) == 0 then true else false fi .
     eq isGrandmother(S) = if find(S, "grandmother(", 0) == 0 then true else false fi .
     eq isSibling(S) = if find(S, "sibling(", 0) == 0 then true else false fi .
+    eq isParent(S) = if find(S, "parent(", 0) == 0 then true else false fi .
 
 
     *** when parsing a string, first check for neg() and then check what kind of term it is
@@ -74,7 +75,19 @@ mod PARSE-MSG is
     ceq innerTerm(S) = grandfather(firstArg(S), secondArg(S)) if isGrandfather(S) .
     ceq innerTerm(S) = grandmother(firstArg(S), secondArg(S)) if isGrandmother(S) .
     ceq innerTerm(S) = sibling(firstArg(S), secondArg(S)) if isSibling(S) .
-    eq innerTerm(S) = "innerTermError(" + S + ")" [owise] .
+    ceq innerTerm(S) = parent(firstArg(S), secondArg(S)) if isParent(S) .
+    eq innerTerm(S) = innerTermError(S) [owise] .
+
+
+    *** remove two last characters (used for removing "\n" from pendingMsg, so it can be
+    *** matched with received message from prolog)
+    op removeTrailingNewline : String -> String .
+    op lastNl : String -> Nat .
+
+    eq lastNl(S) = rfind(S, "\n", length(S)) .
+    ceq removeTrailingNewline(S) = substr(S, 0, length(S) - 1)
+      if lastNl(S) = length(S) - 1 .
+    eq removeTrailingNewline(S) = S [owise] .
 
 endm
 
