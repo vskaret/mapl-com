@@ -23,7 +23,7 @@ test2 is:
 test3 is:
 <> < aClient : Client | none > male("thomas") female("anna") female("anna") female("maria") relationshipStatus("thomas", single) relationshipStatus("anna", single) relationshipStatus("anna", single) relationshipStatus("maria", single)
 
-* The use case
+* Example description
 The point of the examples is to see if anyone will get engaged. The maude program has a conditional
 rewrite rule for engagements where the people getting engaged can't be siblings and none of them can
 be the parent of the other. Who's the parent of who is not known to maude, but is stored as facts on the
