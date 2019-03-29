@@ -1,0 +1,319 @@
+load parse_msg.maude
+load socket.maude
+
+
+*** Trying to have several states at once with rewrite as in erew [{test4(3055)} {test4(3055)}] .
+*** It's not working as intended. It's very likely there's something wrong with the code here,
+*** but it seems like the createTcpClientSocket() to createdSocket() which is a maude built-in
+*** will return the createdSocket() term in a random position, making it impossible to separate
+*** the states.
+
+mod OO-POPULATION is
+    protecting NAT .
+    protecting PARSE-MSG .
+    protecting SOCKET .
+
+    subsort String < Oid .
+
+    *** Message for separating from spouse:
+    op separate : Oid -> Msg [ctor] .
+
+    sort Status .
+    op single : -> Status [ctor] .
+    ops engaged married separated : Oid -> Status [ctor] .
+    op relationshipStatus : Oid Status -> Msg .
+
+    *** Socket stuff
+    op Client : -> Cid .
+    op aClient : -> Oid .
+
+    *** Socket-related equations
+    op createClientSocket : String Nat -> Msg .
+    op plQuery : String String Nat -> Msg . *** Prolog Query, IP, PORT
+    ops plMsg pendingMsg : String -> Msg .
+    op port : Nat -> Msg .
+    
+    *** need some way of saying if the terms brother(O, O') or (not brother(O, O')) does not exist,
+    *** then the prolog server should be queried
+    *** * use a function neg : Bool -> Bool (and subsort Bool < Msg) for not brother(O, O')
+    *** * then use the contains function to check if neither of brother(O, O') nor neg(brother(O, O') exists, then query prolog
+
+    vars X X' X'' X''' X'''' NAME1 NAME2 : String .
+    vars FATHER MOTHER : Oid .
+    vars N N' : Nat .
+    vars S S' : Status .
+    vars C C' Conf : Configuration .
+    vars O O' : Oid .
+    var REST : State .
+
+    sorts State Superstate .
+    ---subsort State < Superstate .
+    ---sort State .
+    op emptystate : -> State .
+    op [_] : State -> Superstate .
+    op __  : State State -> State [ctor assoc  comm  id: emptystate] .
+    op {_} : Configuration -> State [ctor] .
+    op contains : Configuration State -> Bool .
+    eq contains(C, {none}) = false . --- plQuery(c)
+    eq contains(C, {C' Conf}) = if C == C' then true else contains(C, {Conf}) fi . 
+
+    *** need the [] wrapper to know which state to put the new values
+    crl [engagement] :
+        ---[
+          { relationshipStatus(O, single) ---age(O, N)
+            relationshipStatus(O', single) ---age(O', N')
+            Conf }
+          ---REST]
+      =>
+        ---[
+          { relationshipStatus(O, engaged(O')) ---age(O, N)
+            relationshipStatus(O', engaged(O)) ---age(O', N')
+            Conf }
+          ---REST]
+      if contains(neg(sibling(O, O')), {Conf}) or contains(neg(sibling(O', O)), {Conf})
+          /\ contains(neg(parent(O, O')), {Conf})
+          /\ contains(neg(parent(O', O)), {Conf}) .
+
+
+
+    vars SOCKET : Oid .
+    var A : AttributeSet .
+    vars IP MSG PLMSG QUERY : String .
+    vars PORT : Nat .
+
+
+    *** Sending queries to prolog works as follows:
+    *** - plQuery(QUERY, IP, PORT) is created
+    ***
+    *** - plQuery is split into:
+    ******* + plMsg(QUERY)
+    ******* + createClientTcpSocket(socketManager, O, IP, PORT)
+    ***
+    *** - createClientTcpSocket() turns into createdSocket(Oid, socketManager, SOCKET) if
+    ***   maude successfully connected to the prolog server
+    ***   (else socketError(ClientOid, socketManager, REASON))
+    ***
+    *** - createdSocket(Oid, socketManager, SOCKET) and plMsg(QUERY) turns into:
+    ******* + send(SOCKET, OID, QUERY)
+    ******* + pendingMsg(QUERY) (without \n in the end).
+    *******   pendingMsg() is used so each query to the prolog server is only done once
+    ***
+    *** - send() turns into sent() and then received(Oid, SOCKET, PLMSG) if successful (prolog msg)
+    ***
+    *** - received(Oid, SOCKET, PLMSG) and pendingMsg(QUERY) is turned into a term if
+    ***   QUERY is a substring of PLMSG
+    
+    rl [createSocket] :
+        ---[
+          { port(PORT)
+            plQuery(QUERY, IP, PORT)
+	          < O : Client | A >
+            Conf}
+        ---REST]
+      =>
+        ---[
+        { port(PORT)
+            plMsg(QUERY)
+	          < O : Client | A >
+            createClientTcpSocket(socketManager, O, IP, PORT)
+            Conf } .
+          ---REST] .
+
+    --- mellom her virker det å være en bug - createdSocket kommer tilbake i feil state
+
+    --- må ha disse i alle regler hvor kommunikasjon med serveren er nødvendig?
+    rl [createdSocket] :
+	      ---[
+        { < O : Client | A >
+            createdSocket(O, socketManager, SOCKET)
+            plMsg(QUERY)
+            Conf }
+        ---REST]
+      =>
+        ---[
+          { < O : Client | A >
+            send(SOCKET, O, QUERY)
+            pendingMsg(removeTrailingNewline(QUERY))
+            Conf } .
+          ---REST] .
+
+    rl [sent] :
+	      ---[
+          { < O : Client | A >
+            sent(O, SOCKET)
+            Conf }
+        ---REST]
+      =>
+        ---[
+          { < O : Client | A >
+            receive(SOCKET, O)
+            Conf } .
+          ---REST] .
+
+    *** be careful, this could lead to unwanted behavior? ***
+    op _substrof_ : String String -> Bool .
+
+    ceq X substrof X' = false if find(X', X, 0) = notFound .
+    ---ceq X substrof X' = true if find(X', X, 0) >= 0 .
+    eq X substrof X' = true [owise] .
+      
+
+    --- transform message received from prolog server to a term
+    crl [receivedReply] :
+	      ---[
+          { < O : Client | A >
+            received(O, SOCKET, PLMSG)
+            pendingMsg(QUERY)
+            Conf }
+        ---REST]
+      => 
+	      ---[
+          { < O : Client | A > 
+            msgToTerm(PLMSG)
+            Conf }
+          ---REST]
+        if QUERY substrof PLMSG . *** make a better way to do this?
+      *** ^ doing it like this because
+      *** if sent message is "sibling(anna,thomas)\n"
+      *** the received message can be:
+      *** * sibling(anna,thomas)end_of_file or
+      *** * neg(sibling(anna,thomas))end_of_file
+
+    crl [engagementSiblingQuery] :
+        ---[
+          { relationshipStatus(NAME1, single)
+            relationshipStatus(NAME2, single)
+            port(PORT)
+            Conf }
+          ---REST]
+      =>
+          ---[
+            { relationshipStatus(NAME1, single)
+            relationshipStatus(NAME2, single)
+            port(PORT)
+            Conf
+            plQuery("sibling(" + NAME1 + "," + NAME2 + ")\n", "localhost", PORT) }
+          ---REST]
+      if     not (contains(sibling(NAME1, NAME2), {Conf}))
+          /\ not (contains(sibling(NAME2, NAME1), {Conf}))
+          /\ not (contains(neg(sibling(NAME1, NAME2)), {Conf})) 
+          /\ not (contains(neg(sibling(NAME2, NAME1)), {Conf})) 
+          /\ not (contains(plQuery("sibling(" + NAME1 + "," + NAME2 + ")\n", "localhost", PORT), {Conf}))
+          /\ not (contains(plQuery("sibling(" + NAME2 + "," + NAME1 + ")\n", "localhost", PORT), {Conf}))
+          /\ not (contains(plMsg("sibling(" + NAME1 + "," + NAME2 + ")\n"), {Conf}))
+          /\ not (contains(plMsg("sibling(" + NAME2 + "," + NAME1 + ")\n"), {Conf})) 
+          /\ not (contains(pendingMsg("sibling(" + NAME1 + "," + NAME2 + ")"), {Conf})) 
+          /\ not (contains(pendingMsg("sibling(" + NAME2 + "," + NAME1 + ")"), {Conf})) .
+
+    ---(
+    crl [engagementParentQuery] :
+        ---[
+          { relationshipStatus(NAME1, single)
+            relationshipStatus(NAME2, single)
+            port(PORT)
+            Conf }
+          ---REST]
+      =>
+        ---[
+          { relationshipStatus(NAME1, single)
+          relationshipStatus(NAME2, single)
+          port(PORT)
+          Conf
+          plQuery("parent(" + NAME1 + "," + NAME2 + ")\n", "localhost", PORT)
+          plQuery("parent(" + NAME2 + "," + NAME1 + ")\n", "localhost", PORT) }
+        ---REST]
+      if     not (contains(parent(NAME1, NAME2), {Conf}))
+          /\ not (contains(neg(parent(NAME1, NAME2)), {Conf})) 
+          /\ not (contains(plQuery("parent(" + NAME1 + "," + NAME2 + ")\n", "localhost", PORT), {Conf}))
+          /\ not (contains(plMsg("parent(" + NAME1 + "," + NAME2 + ")\n"), {Conf}))
+          /\ not (contains(pendingMsg("parent(" + NAME1 + "," + NAME2 + ")"), {Conf})) .
+    )
+
+    crl [testQuery] :
+          { relationshipStatus(NAME1, single)
+            port(PORT)
+            Conf }
+      =>
+            { relationshipStatus(NAME1, single)
+            port(PORT)
+            Conf
+            plQuery("male(" + NAME1 + ")\n", "localhost", PORT) }
+      if     not (contains(male(NAME1), {Conf}))
+          /\ not (contains(neg(male(NAME1)), {Conf})) 
+          /\ not (contains(plQuery("male(" + NAME1 + ")\n", "localhost", PORT), {Conf}))
+          /\ not (contains(plMsg("male(" + NAME1 + ")\n"), {Conf}))
+          /\ not (contains(pendingMsg("male(" + NAME1 + ")"), {Conf})) .
+
+    ops test test2 test3 test4 test5 : Nat -> Configuration .
+    ---op test5 : -> Configuration .
+
+    eq test(PORT) =
+        <> < aClient : Client | none >
+        port(PORT)
+        male("thomas") female("anna")
+        relationshipStatus("thomas", single)
+        relationshipStatus("anna", single) .
+
+    eq test2(PORT) =
+        <> < aClient : Client | none >
+        port(PORT)
+        male("rolf") female("maria") female("anna")
+        relationshipStatus("rolf", single)
+        relationshipStatus("anna", single)
+        relationshipStatus("maria", single) .
+
+    eq test3(PORT) =
+        <> < aClient : Client | none >
+        port(PORT)
+        male("thomas") male("rolf") female("anna") female("maria")
+        relationshipStatus("thomas", single)
+        relationshipStatus("rolf", single)
+        relationshipStatus("anna", single)
+        relationshipStatus("maria", single) .
+
+    eq test4(PORT) =
+        <> < aClient : Client | none >
+        port(PORT)
+        female("anna")
+        relationshipStatus("anna", single) .
+
+    eq test5(PORT) =
+        <> < aClient : Client | none >
+        port(PORT)
+        female("maria")
+        relationshipStatus("maria", single) .
+
+    --- erew [{test4()} {test5()}] viser at det ikke fungerer (test5 mottar test4 meldingen)
+
+---erewrite in OO-POPULATION : [{test4(3055)} {test5(3055)}] .
+---rewrites: 514 in 1ms cpu (2ms real) (514000 rewrites/second)
+---result Superstate: [{<> female("anna") pendingMsg("male(anna)") port(3055)
+    ---relationshipStatus("anna", single) < aClient : Client | none >
+    ---createdSocket(aClient, socketManager, socket(4))} {<> female("maria")
+    ---plMsg("male(maria)\n") port(3055) relationshipStatus("maria", single) <
+    ---aClient : Client | none > received(aClient, socket(3),
+    ---"neg(male(anna))end_of_file")}]
+
+endm
+
+
+--- search =>* female("Hera") C:Configuration
+--- funker ikke fordi spesifikasjonen ikke er terminerende. bruk heller:
+--- search [1] =>* female("Hera") C:Configuration
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
