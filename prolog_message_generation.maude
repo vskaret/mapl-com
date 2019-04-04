@@ -1,0 +1,157 @@
+*** send a message to prolog that consists of two lists:
+*** a list with terms/predicates
+*** a list with strings/symbols that can be arguments to the terms in the first [assoc right id:] .
+
+*** obs: må loade helt øverst i fila uansett? funka ikke ved loading over den nederste modulen
+load socket.maude
+
+
+fmod QUERIES is
+    sorts Query QueryList .
+    subsort Query < QueryList .
+
+    op nil : -> QueryList [ctor] .
+    op _::_ : QueryList QueryList -> QueryList [ctor assoc id: nil] .
+endfm
+
+fmod ARGUMENTS is
+    protecting STRING .
+
+    sorts StringList .
+    subsort String < StringList .
+
+    op empty : -> StringList [ctor] .
+    op _;;_ : StringList StringList -> StringList [ctor assoc id: empty] .
+endfm
+
+mod MESSAGE-GENERATION is
+    protecting QUERIES .
+    protecting ARGUMENTS .
+
+    sort Argument .
+    subsort Query < Argument .
+    
+    ops A B C D E : -> Argument [ctor] . *** constants used as prolog arguments
+    ops sibling parent : Argument Argument -> Query [ctor] .
+    op test : Query -> Query [ctor] .
+
+    ops queryList singleQueryList : -> QueryList .
+    op symbolList : -> StringList .
+
+    eq queryList = sibling(A, B) :: parent(A, B) .
+    eq singleQueryList = parent(A, B) .
+
+    eq symbolList = "anne" ;; "rolf" ;; "maria" ;; "thomas" .
+
+
+    vars X Y : Argument .
+    vars Q : Query .
+    var QLIST : QueryList .
+    var SLIST : StringList .
+    var S : String .
+
+    op queryToString : Query -> String .
+    eq queryToString(sibling(X, Y)) = "sibling(" + argToString(X) + "," + argToString(Y) + ")" .
+    eq queryToString(parent(X, Y)) = "parent(" + argToString(X) + "," + argToString(Y) + ")" .
+    eq queryToString(test(X)) = "test(" + argToString(X) + ")" .
+
+    op argToString : Argument -> String .
+    eq argToString(Q) = queryToString(Q) .
+    eq argToString(A) = "A" .
+    eq argToString(B) = "B" .
+    eq argToString(C) = "C" .
+    eq argToString(D) = "D" .
+    eq argToString(E) = "E" .
+
+    op queryListToString : QueryList -> String .
+    eq queryListToString(nil) = "" .
+    eq queryListToString(Q :: nil) = queryToString(Q) .
+    ---eq queryListToString(Q :: QLIST) = queryToString(Q) + " :: " + queryListToString(QLIST) .
+    eq queryListToString(Q :: QLIST) = queryToString(Q) + "," + queryListToString(QLIST) .
+
+    op stringListToString : StringList -> String .
+    eq stringListToString(empty) = "" .
+    eq stringListToString(S ;; empty) = S .
+    ---eq stringListToString(S ;; SLIST) = S + " ;; " + stringListToString(SLIST) .
+    eq stringListToString(S ;; SLIST) = S + "," + stringListToString(SLIST) .
+
+    op queryPlusSymbolMsg : QueryList StringList -> String .
+    eq queryPlusSymbolMsg(QLIST, SLIST) =
+        "[" + queryListToString(QLIST) + "]|[" + stringListToString(SLIST) + "]" .
+
+    op queryMsg : QueryList -> String .
+    ---eq queryMsg(QLIST) = "[" + queryListToString(QLIST) + "]" .
+    eq queryMsg(QLIST) = queryListToString(QLIST) .
+
+    op msgToTerm : String -> QueryList .
+
+endm
+
+mod PROLOG-MESSAGE-GENERATION is
+    protecting MESSAGE-GENERATION .
+    protecting SOCKET .
+    including CONFIGURATION .
+
+    subsorts QueryList StringList < Msg .
+
+    *** Socket stuff
+    op Client : -> Cid .
+    op aClient : -> Oid .
+    op serverinfo : String Nat -> Msg .
+
+
+    vars SOCKET O : Oid .
+    var A : AttributeSet .
+    vars IP MSG : String .
+    vars PORT : Nat .
+    var SLIST : StringList .
+    var QLIST : QueryList .
+
+    rl [createSocket] :
+        < O : Client | A >
+        serverinfo(IP, PORT)
+      =>
+        < O : Client | A >
+        createClientTcpSocket(socketManager, O, IP, PORT) .
+
+    rl [createdSocket] :
+	      < O : Client | A >
+        ---SLIST
+        QLIST
+        createdSocket(O, socketManager, SOCKET)
+      =>
+        < O : Client | A >
+        ---send(SOCKET, O, makeMessage(QLIST, SLIST) + "\n") .
+        ---send(SOCKET, O, queryPlusSymbolMsg(QLIST, SLIST) + "\n") .
+        send(SOCKET, O, queryMsg(QLIST) + "\n") .
+        ---send(SOCKET, O, "hallo\n") .
+
+    rl [sent] :
+	      < O : Client | A >
+        sent(O, SOCKET)
+      =>
+        < O : Client | A >
+        ---receive(SOCKET, O) .
+        .
+
+    ---(
+    --- transform message received from prolog server to a term
+    rl [receivedReply] :
+	      < O : Client | A >
+        received(O, SOCKET, MSG)
+      => 
+	      < O : Client | A > 
+        msgToTerm(MSG) .
+    )
+
+
+
+    *** initial configurations
+    op init : Nat -> Configuration .
+    eq init(PORT) =
+        <> < aClient : Client | none >
+        serverinfo("localhost", PORT)
+        ---symbolList
+        singleQueryList .
+
+endm
