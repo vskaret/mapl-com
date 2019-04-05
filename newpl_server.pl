@@ -67,41 +67,87 @@ handle_service(StreamPair) :-
     %handle_message(String),
 
     % transforms codes into a term (which can be used as a query)
-    % Queries can for example be [parent(A, B), sibling(A, B)]
+    % Queries should be in the form of a list like [parent(A, B), sibling(A, B)]
     read_term_from_codes(Codes, Queries, []),
-    maplist(handle_query, Queries).
+    writeln(Queries),
+    %maplist(handle_query, [StreamPair, Queries]),
+    maplist_const(handle_query, StreamPair, Queries),
+    %format(StreamPair, "***end_of_message***~w", [end_of_file]). % need to tell maude to stop receiving messages somehow
+    format(StreamPair, " .", []). % need to tell maude to stop receiving messages somehow
 
     % writes reply back to client
     % reply(StreamPair, Query).
-
     %handle_service(StreamPair).
 
 
 
-% shows all results for queries with two arguments
-handle_query(Query) :-
+% shows all results for queries
+handle_query(StreamPair, Query) :-
+    %writeln(Query).
+    %format("nooo~n"),
     Query =.. [F|Args],
     format("F = ~w~n", [F]),
     format("Args = ~w~n", [Args]),
 
     % if all args are terms, run query deterministically
     % else run it non-deterministically
-    (maplist(atom, Args), handle_deterministic_query(Query);
-    flatten([F, Args], L), handle_non_deterministic_query(Query, L)).
+    (maplist(atom, Args), handle_deterministic_query(StreamPair, Query);
+     flatten([F, Args], L), handle_non_deterministic_query(StreamPair, Query, L)).
+    %(maplist(atom, Args), handle_deterministic_query(StreamPair, Query);
+     %flatten([F, Args], L), handle_non_deterministic_query(StreamPair, Query, L)).
 
 
 
 
-% List is [process, var1, var2]
-% TODO: how to handle different sized lists?
-handle_non_deterministic_query(Query, List) :-
-    forall(Query, format('~w(~w,~w)~n', List)).
+% FunctionList should be [process, var1, var2]
+handle_non_deterministic_query(StreamPair, Query, FunctionList) :-
+    forall(Query, write_variable_sized_term(StreamPair, FunctionList)).
+    %forall(Query, format('~w(~w,~w)~n', [Functor|Arguments])),
 
-handle_deterministic_query(Query) :-
+    % TODO: is something like this possible?
+    %forall(\+ Query, format('~w(~w,~w)~n', [Functor|Arguments])).
+%forall(Query, format('~w(~w,~w)~n', List)).
+
+
+% writes out a term with a functor where the amount of arguments can vary
+write_variable_sized_term(StreamPair, [Functor|Arguments]) :-
+    format(StreamPair, '~w(', Functor),
+    write_arguments(StreamPair, Arguments),
+    format(StreamPair, ') # ', []).
+/*
+    format('~w(', Functor),
+    write_arguments(Arguments),
+    format(')~n').
+*/
+
+% writes out a list of variable size: e1,e2,e3
+write_arguments(StreamPair, [FirstArg|Rest]) :-
+    (length(Rest, 0), format(StreamPair, '~w', FirstArg));          % base case (last argument)
+    (format(StreamPair, '~w,', FirstArg), write_arguments(StreamPair, Rest)).
+
+/*
+write_arguments(StreamPair, [LastArg]) :-
+    format(StreamPair, '~w', LastArg).
+*/
+
+/*
+    (length(Rest, 0), format('~w', FirstArg));          % base case (last argument)
+    (format('~w,', FirstArg), write_arguments(Rest)).
+*/
+
+
+% writes the query if it's true and neg(query) if false.
+handle_deterministic_query(StreamPair, Query) :-
+    (Query,
+     format(StreamPair, '~w~n', Query));
+    (\+ Query,
+     format(StreamPair, 'neg(~w)~n', Query)).
+/*
     (Query,
      format('~w~n', Query));
     (\+ Query,
     format('neg(~w)~n', Query)).
+*/
 
 
 
@@ -130,4 +176,7 @@ eof_error_reply(StreamPair) :-
     format(StreamPair, 'eof_error~w', [end_of_file]).
 
 
-
+maplist_const(_, _, []).
+maplist_const(Pred, Const, [H|T]) :-
+    call(Pred, Const, H),
+    maplist_const(Pred, Const, T).

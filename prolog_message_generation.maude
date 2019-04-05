@@ -30,16 +30,20 @@ mod MESSAGE-GENERATION is
 
     sort Argument .
     subsort Query < Argument .
+    subsort String < Argument .
     
     ops A B C D E : -> Argument [ctor] . *** constants used as prolog arguments
-    ops sibling parent : Argument Argument -> Query [ctor] .
+    ops sibling parent uncle aunt grandfather grandmother : Argument Argument -> Query [ctor] .
     op test : Query -> Query [ctor] .
 
-    ops queryList singleQueryList : -> QueryList .
+    ops queryList singleQueryList specificQuery : -> QueryList .
     op symbolList : -> StringList .
 
-    eq queryList = sibling(A, B) :: parent(A, B) .
-    eq singleQueryList = parent(A, B) .
+    eq queryList = sibling(A, B) :: parent(A, B) :: uncle(A, B) :: aunt(A, B)
+        :: grandfather(A, B) :: grandmother(A, B) .
+    eq singleQueryList = sibling(A, B) .
+    eq specificQuery = parent("rolf", "anne") .
+
 
     eq symbolList = "anne" ;; "rolf" ;; "maria" ;; "thomas" .
 
@@ -48,11 +52,27 @@ mod MESSAGE-GENERATION is
     vars Q : Query .
     var QLIST : QueryList .
     var SLIST : StringList .
-    var S : String .
+    vars S S' S'' : String .
+
+    op stringToQuery : String -> QueryList .
+    eq stringToQuery("sibling") =
+        sibling("a", "b") .
+    eq stringToQuery("sibling(" + S) =
+        sibling("c", "d") .
 
     op queryToString : Query -> String .
-    eq queryToString(sibling(X, Y)) = "sibling(" + argToString(X) + "," + argToString(Y) + ")" .
-    eq queryToString(parent(X, Y)) = "parent(" + argToString(X) + "," + argToString(Y) + ")" .
+    eq queryToString(sibling(X, Y)) =
+        "sibling(" + argToString(X) + "," + argToString(Y) + ")" .
+    eq queryToString(parent(X, Y)) =
+        "parent(" + argToString(X) + "," + argToString(Y) + ")" .
+    eq queryToString(uncle(X, Y)) =
+        "uncle(" + argToString(X) + "," + argToString(Y) + ")" .
+    eq queryToString(aunt(X, Y)) =
+        "aunt(" + argToString(X) + "," + argToString(Y) + ")" .
+    eq queryToString(grandfather(X, Y)) =
+        "grandfather(" + argToString(X) + "," + argToString(Y) + ")" .
+    eq queryToString(grandmother(X, Y)) =
+        "grandmother(" + argToString(X) + "," + argToString(Y) + ")" .
     eq queryToString(test(X)) = "test(" + argToString(X) + ")" .
 
     op argToString : Argument -> String .
@@ -62,6 +82,7 @@ mod MESSAGE-GENERATION is
     eq argToString(C) = "C" .
     eq argToString(D) = "D" .
     eq argToString(E) = "E" .
+    eq argToString(S) = S .
 
     op queryListToString : QueryList -> String .
     eq queryListToString(nil) = "" .
@@ -80,10 +101,23 @@ mod MESSAGE-GENERATION is
         "[" + queryListToString(QLIST) + "]|[" + stringListToString(SLIST) + "]" .
 
     op queryMsg : QueryList -> String .
-    ---eq queryMsg(QLIST) = "[" + queryListToString(QLIST) + "]" .
-    eq queryMsg(QLIST) = queryListToString(QLIST) .
+    eq queryMsg(QLIST) = "[" + queryListToString(QLIST) + "]" .
+    ---eq queryMsg(QLIST) = queryListToString(QLIST) .
 
-    op msgToTerm : String -> QueryList .
+    *** funker ikke som ønsket. prolog vil ha uendelig svar med atomer som er usanne
+    *** derfor skrives ikke noen ut(?)
+    ---(
+    op negQueryListToString : QueryList -> String .
+    eq negQueryListToString(nil) = "" .
+    eq negQueryListToString(Q :: nil) = "\\+ " + queryToString(Q) .
+    eq negQueryListToString(Q :: QLIST) =
+        "\\+ " + queryToString(Q) + "," + negQueryListToString(QLIST) .
+
+    op negQueryMsg : QueryList -> String .
+    eq negQueryMsg(QLIST) = "[" + negQueryListToString(QLIST) + "]" .
+    )
+
+    ---op msgToTerm : String -> QueryList .
 
 endm
 
@@ -124,6 +158,7 @@ mod PROLOG-MESSAGE-GENERATION is
         ---send(SOCKET, O, makeMessage(QLIST, SLIST) + "\n") .
         ---send(SOCKET, O, queryPlusSymbolMsg(QLIST, SLIST) + "\n") .
         send(SOCKET, O, queryMsg(QLIST) + "\n") .
+        ---send(SOCKET, O, negQueryMsg(QLIST) + "\n") .
         ---send(SOCKET, O, "hallo\n") .
 
     rl [sent] :
@@ -131,18 +166,17 @@ mod PROLOG-MESSAGE-GENERATION is
         sent(O, SOCKET)
       =>
         < O : Client | A >
-        ---receive(SOCKET, O) .
-        .
+        receive(SOCKET, O) .
+        ---.
 
-    ---(
     --- transform message received from prolog server to a term
     rl [receivedReply] :
 	      < O : Client | A >
         received(O, SOCKET, MSG)
       => 
 	      < O : Client | A > 
-        msgToTerm(MSG) .
-    )
+        stringToQuery(MSG) .
+        ---msgToTerm(MSG) .
 
 
 
@@ -151,7 +185,9 @@ mod PROLOG-MESSAGE-GENERATION is
     eq init(PORT) =
         <> < aClient : Client | none >
         serverinfo("localhost", PORT)
+        ---queryList .
         ---symbolList
         singleQueryList .
+        ---specificQuery .
 
 endm
