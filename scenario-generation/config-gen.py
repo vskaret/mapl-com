@@ -3,6 +3,16 @@ from sys import argv
 
 ### some method(s) ###
 
+def write_config_to_file(fname, output):
+    with open(fname, 'w') as outfile:
+        outfile.write("mod GEO-INIT is\n")
+        outfile.write("  protecting GEO-DEFINITION .\n")
+        outfile.write("  protecting GEO-FUNCS .\n")
+        outfile.write("  protecting GEO-PETROLEUM .\n")
+        outfile.write("  protecting NAT .\n")
+        outfile.write(output)
+        outfile.write("\nendm")
+
 def replace_pattern(text, values_list, pattern_list, output_file):
     """Replaces parts of the text where it has matched with an element from the pattern list
     with the corresponding element in the values_list. It will first replace the first match,
@@ -12,7 +22,7 @@ def replace_pattern(text, values_list, pattern_list, output_file):
     Note that the patterns in pattern list must have two groups (one before the word to be
     replaced and one after)."""
 
-    # need copy of the list because of using pop later (popo will edit the list outside of this scope)
+    # need copy of the list because of using pop later (pop will edit the list outside of this scope)
     values_list = values_list.copy()
     pattern_list = pattern_list.copy()
 
@@ -35,11 +45,14 @@ def replace_pattern(text, values_list, pattern_list, output_file):
 
         # change operator name
         op_text = "\n\n\n  op " + operator_name + str(equation_number) + " : -> Configuration [ctor] .\n"
-        output_file.write(op_text)
+        #output_file.write(op_text)
 
         # add number to the eq name as in eq caseStudy becomes eq caseStudy0
-        eq_text = "  eq " + operator_name + str(equation_number) + text
-        output_file.write(eq_text+"\n")
+        eq_text = "  eq " + operator_name + str(equation_number) + text + "\n"
+        #output_file.write(eq_text+"\n")
+
+        write_config_to_file(out_file + str(equation_number) + ".maude", op_text + eq_text)
+
         equation_number += 1
         return
 
@@ -62,8 +75,9 @@ def replace_pattern(text, values_list, pattern_list, output_file):
 ### start of script ###
 
 # filenames
-in_file = "geo-init.maude"
-out_file = "test-init.maude"
+in_file = "geo-init2.maude"
+#out_file = "test-init2.maude"
+out_file = "test-init"
 
 # global variables (for writing out to file)
 equation_number = 0
@@ -111,38 +125,58 @@ traptype_pattern = re.compile(r"(trapformation\(\d+,)unknown(\))")
 permeable_sandstone_pattern = re.compile(sandstone_permeability + unknown + end, flags=re.DOTALL)
 porosity_sandstone_pattern = re.compile(sandstone_porosity + unknown + end, flags=re.DOTALL)
 
-equation_pattern = re.compile(r"eq " + operator_name + r"(.*\.)", re.DOTALL)
+equation_pattern = re.compile(r"eq " + operator_name + r"(.*?\.)", re.DOTALL)
 
 list_of_values = [
     fault_filling_values,
-    permeability_values,
-    porosity_values
+    #permeability_values,
+    #porosity_values
 ]
 
 list_of_patterns = [
     fault_filling_pattern,
-    permeable_sandstone_pattern,
-    porosity_sandstone_pattern
+    #permeable_sandstone_pattern,
+    #porosity_sandstone_pattern
 ]
 
 # clear output file
-with open(out_file, 'w') as out:
-    out.write("")
+#with open(out_file, 'w') as out:
+    #out.write("")
+
+
+#with open(in_file, 'r') as input:
+    #with open(out_file, 'a') as out:
+        #text = input.read()
+        #equation_text = re.findall(equation_pattern, text)
+
+        #configs = re.findall(equation_pattern, text)
+        #for config in configs:
+            #out.write("mod GEO-INIT is\n")
+            #out.write("  protecting GEO-DEFINITION .\n")
+            #out.write("  protecting GEO-FUNCS .\n")
+            #out.write("  protecting GEO-PETROLEUM .\n")
+            #out.write("  protecting NAT .\n")
+            #replace_pattern(config, list_of_values, list_of_patterns, out)
+            #out.write("\nendm")
+
 
 with open(in_file, 'r') as input:
-    with open(out_file, 'a') as out:
-        text = input.read()
+    text = input.read()
+    equation_text = re.findall(equation_pattern, text)
 
-        equation_text = re.search(equation_pattern, text).group(1)
+    configs = re.findall(equation_pattern, text)
+    i = 0
+    for config in configs:
 
-        # make this not be hard-coded?
-        out.write("mod GEO-INIT is\n")
-        out.write("  protecting GEO-DEFINITION .\n")
-        out.write("  protecting GEO-FUNCS .\n")
-        out.write("  protecting GEO-PETROLEUM .\n")
-        out.write("  protecting NAT .\n")
+        # utskrivingen skjer i løvnodene..
 
-        replace_pattern(equation_text, list_of_values, list_of_patterns, out)
+        with open(out_file + str(i) + ".maude", 'w') as out:
+            out.write("mod GEO-INIT is\n")
+            out.write("  protecting GEO-DEFINITION .\n")
+            out.write("  protecting GEO-FUNCS .\n")
+            out.write("  protecting GEO-PETROLEUM .\n")
+            out.write("  protecting NAT .\n")
 
-        out.write("\nendm")
+            replace_pattern(config, list_of_values, list_of_patterns, out)
 
+            out.write("\nendm")
