@@ -13,7 +13,8 @@ def write_config_to_file(fname, output):
         outfile.write(output)
         outfile.write("\nendm")
 
-def replace_pattern(text, values_list, pattern_list, output_file):
+#def replace_pattern(text, values_list, pattern_list, output_file, comments=""):
+def replace_pattern(text, values_list, pattern_list, comments=""):
     """Replaces parts of the text where it has matched with an element from the pattern list
     with the corresponding element in the values_list. It will first replace the first match,
     with all elements in the first list in values_list, then make a recursive call to create
@@ -43,6 +44,10 @@ def replace_pattern(text, values_list, pattern_list, output_file):
         # oops not so nice maybe (global variables)
         global equation_number, operator_name
 
+        #if equation_number == 0:
+            #print("**")
+            #print(comments)
+
         # change operator name
         op_text = "\n\n\n  op " + operator_name + str(equation_number) + " : -> Configuration [ctor] .\n"
         #output_file.write(op_text)
@@ -51,7 +56,10 @@ def replace_pattern(text, values_list, pattern_list, output_file):
         eq_text = "  eq " + operator_name + str(equation_number) + text + "\n"
         #output_file.write(eq_text+"\n")
 
-        write_config_to_file(out_file + str(equation_number) + ".maude", op_text + eq_text)
+        fname = out_file + str(equation_number) + ".maude"
+        output = "\n" + comments + op_text + eq_text
+
+        write_config_to_file(fname, output)
 
         equation_number += 1
         return
@@ -62,11 +70,23 @@ def replace_pattern(text, values_list, pattern_list, output_file):
     pattern = pattern_list[0]
 
     for value in values:
+        # assumption made for the following geo-unit
+        #geo_unit = re.search(pattern,text).group(1).split("\n")[0]
+        info = re.search(pattern,text).group(1)
+        geo_unit = re.search(geo_unit_pattern, info).group(1)
+
+
         # replace the part of pattern which is not in the first group or second group with value
         result = re.sub(pattern, r'\g<1>'+value+r'\g<2>', text, count=1)
 
+
+
+        # add assumption comment
+        comment = comments + "--- Geo-unit " + geo_unit + " is assumed to be " + value + "\n"
+
         # replace the rest
-        replace_pattern(result, values_list, pattern_list, output_file)
+        #replace_pattern(result, values_list, pattern_list, output_file, comment)
+        replace_pattern(result, values_list, pattern_list, comment)
 
 
 
@@ -84,7 +104,7 @@ equation_number = 0
 operator_name = "caseStudy"
 
 # terminal arguments:
-if len(argv) > 1 and argv[1].lower() in ['?', 'h', 'help', '--help']:
+if len(argv) > 1 and argv[1].lower() in ['?', 'h', 'help', '--help', '-h']:
     print("python3 config-gen.py input-file output-file [maude-operator-name]")
     print("If no command line arguments given, default will be:")
     print("input-file: 'geo-init.maude'")
@@ -113,7 +133,8 @@ porosity_values = ["porous", "non-porous"]
 sandstone = r"<[^>]*?Type: sandstone"
 unknown = r"unknown"
 # grouped (these parts will be kept during replacement, but can max have 2)
-fault_filling = r"(<.*?Fault.*?Filling: )"
+#fault_filling = r"(<.*?Fault.*?Filling: )"
+fault_filling = r"(<[^>]*?Fault[^>]*?Filling: )"
 end = r"([^>]*?>)"
 sandstone_permeability = r"(" + sandstone + r"[^>]*?Permeability: )"
 sandstone_porosity = r"(" + sandstone + r"[^>]*?Porosity: )"
@@ -126,6 +147,7 @@ permeable_sandstone_pattern = re.compile(sandstone_permeability + unknown + end,
 porosity_sandstone_pattern = re.compile(sandstone_porosity + unknown + end, flags=re.DOTALL)
 
 equation_pattern = re.compile(r"eq " + operator_name + r"(.*?\.)", re.DOTALL)
+geo_unit_pattern = re.compile(r"< (\d+)")
 
 list_of_values = [
     fault_filling_values,
@@ -170,13 +192,19 @@ with open(in_file, 'r') as input:
 
         # utskrivingen skjer i løvnodene..
 
-        with open(out_file + str(i) + ".maude", 'w') as out:
-            out.write("mod GEO-INIT is\n")
-            out.write("  protecting GEO-DEFINITION .\n")
-            out.write("  protecting GEO-FUNCS .\n")
-            out.write("  protecting GEO-PETROLEUM .\n")
-            out.write("  protecting NAT .\n")
+        comment = "--- Assumptions made in Python:\n"
 
-            replace_pattern(config, list_of_values, list_of_patterns, out)
+        replace_pattern(config, list_of_values, list_of_patterns, comment)
 
-            out.write("\nendm")
+        #with open(out_file + str(i) + ".maude", 'w') as out:
+            #out.write("mod GEO-INIT is\n")
+            #out.write("  protecting GEO-DEFINITION .\n")
+            #out.write("  protecting GEO-FUNCS .\n")
+            #out.write("  protecting GEO-PETROLEUM .\n")
+            #out.write("  protecting NAT .\n")
+
+            #comment = "--- Assumptions made in Python:\n"
+
+            #replace_pattern(config, list_of_values, list_of_patterns, out, comment)
+
+            #out.write("\nendm")
